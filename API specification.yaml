@@ -1,128 +1,345 @@
 openapi: 3.0.3
 info:
-  title: Kiosk API
-  description: API для стойки самообслуживания (оформление заказа)
+  title: Kiosk Self‑Service API
   version: 1.0.0
+  description: API для стойки самообслуживания (оформление заказа)
+
 servers:
-  - url: http://swagger.io/api/v1
-    description: server
+  - url: https://zemlav11.github.io/otus_restobook/swagger.html
+    description: Production server
 
 tags:
-  - name: Cart
-    description: Управление корзиной
+  - name: Categories
+    description: Просмотр меню, категорий и товаров
+  - name: Carts
+    description: Работа с корзиной
   - name: Orders
-    description: Информация о заказах
+    description: Управление заказом
+  - name: Loyalty
+    description: Программа лояльности
+  - name: Payments
+    description: Проведение оплаты
 
 paths:
-  /cart:
+  # ==================== Categories ====================
+  /categories:
     get:
-      tags: [Cart]
-      summary: Получить текущую корзину
-      security:
-        - SessionID: []
-        - BearerAuth: []
+      tags: [Categories]
+      summary: Получить список категорий
+      operationId: getCategories
       responses:
         '200':
-          description: Успешно
+          description: Успешный ответ
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Cart'
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
 
-  /cart/items:
-    post:
-      tags: [Cart]
-      summary: Добавить товар в корзину
-      security:
-        - SessionID: []
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AddItemRequest'
+  /categories/{categoryId}/items:
+    get:
+      tags: [Categories]
+      summary: Получить блюда в категории
+      operationId: getItemsByCategory
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: string
       responses:
         '200':
-          description: Обновлённая корзина
+          description: Список блюд
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Cart'
-        '400':
-          description: Неверные данные
+                type: array
+                items:
+                  $ref: '#/components/schemas/Item'
 
-  /cart/items/{itemId}:
-    put:
-      tags: [Cart]
-      summary: Изменить количество товара в позиции корзины
-      description: |
-        Позволяет изменить количество конкретной позиции в корзине.
-      security:
-        - SessionID: []
-        - BearerAuth: []
+  /items/{itemId}:
+    get:
+      tags: [Categories]
+      summary: Детальная информация о блюде (включая модификаторы)
+      operationId: getItem
       parameters:
         - name: itemId
           in: path
           required: true
           schema:
-            type: integer
-          description: Уникальный идентификатор позиции в корзине (возвращается при добавлении товара)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateItemRequest'
+            type: string
       responses:
         '200':
-          description: Корзина успешно обновлена
+          description: Данные блюда
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+
+  # ==================== Carts ====================
+  /carts:
+    post:
+      tags: [Carts]
+      summary: Создать новую корзину
+      operationId: createCart
+      responses:
+        '201':
+          description: Корзина создана
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cartId:
+                    type: string
+
+  /carts/{cartId}:
+    get:
+      tags: [Carts]
+      summary: Получить состояние корзины
+      operationId: getCart
+      parameters:
+        - name: cartId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Корзина
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Cart'
-        '400':
-          description: Неверный запрос (например, отрицательное количество)
         '404':
-          description: Позиция с указанным itemId не найдена в текущей корзине
+          description: Корзина не найдена
 
     delete:
-      tags: [Cart]
-      summary: Удалить позицию из корзины
-      security:
-        - SessionID: []
-        - BearerAuth: []
+      tags: [Carts]
+      summary: Очистить корзину полностью
+      operationId: clearCart
       parameters:
-        - name: itemId
+        - name: cartId
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+      responses:
+        '204':
+          description: Корзина очищена
+        '404':
+          description: Корзина не найдена
+
+  /carts/{cartId}/items:
+    post:
+      tags: [Carts]
+      summary: Добавить товар в корзину
+      operationId: addItemToCart
+      parameters:
+        - name: cartId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemId, quantity]
+              properties:
+                itemId:
+                  type: string
+                  description: Идентификатор товара из меню
+                quantity:
+                  type: integer
+                  minimum: 1
+                  description: Количество добавляемых единиц товара
+                modifiers:
+                  type: array
+                  description: Список идентификаторов выбранных модификаторов (размер, доп. ингредиенты и т.п.)
+                  items:
+                    type: string
       responses:
         '200':
-          description: Обновлённая корзина
+          description: Позиция добавлена, возвращается обновлённая корзина
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Cart'
+        '400':
+          description: Неверные данные (неверный itemId, конфликтующие модификаторы)
+        '404':
+          description: Корзина не найдена
+        '409':
+          description: Товар или модификаторы временно недоступны (нет ингредиентов)
 
-  /orders/{id}:
-    get:
-      tags: [Orders]
-      summary: Получить информацию о заказе
-      security:
-        - SessionID: []
-        - BearerAuth: []
+  /carts/{cartId}/items/{cartItemId}:
+    put:
+      tags: [Carts]
+      summary: Изменить количество позиции в корзине
+      operationId: updateCartItemQuantity
       parameters:
-        - name: id
+        - name: cartId
           in: path
           required: true
           schema:
-            type: integer
-          description: Идентификатор заказа
+            type: string
+        - name: cartItemId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Идентификатор позиции в корзине (присваивается при добавлении)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 1
+                  description: Новое количество товара в данной позиции
       responses:
         '200':
-          description: Успешно
+          description: Корзина обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '400':
+          description: Неверное количество
+        '404':
+          description: Корзина или позиция не найдены
+
+    delete:
+      tags: [Carts]
+      summary: Удалить позицию из корзины
+      operationId: removeCartItem
+      parameters:
+        - name: cartId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cartItemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Корзина обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '404':
+          description: Корзина или позиция не найдены
+
+  /carts/{cartId}/checkout:
+    post:
+      tags: [Carts]
+      summary: Применить акции и перейти к оплате
+      operationId: checkout
+      parameters:
+        - name: cartId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Корзина с применёнными скидками и подарками
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '404':
+          description: Корзина не найдена
+
+  /carts/{cartId}/dining-option:
+    put:
+      tags: [Carts]
+      summary: Установить способ употребления
+      operationId: setDiningOption
+      parameters:
+        - name: cartId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                option:
+                  type: string
+                  enum: [DINE_IN, TAKEAWAY]
+      responses:
+        '200':
+          description: Корзина обновлена
+        '404':
+          description: Корзина не найдена
+
+  # ==================== Orders ====================
+  /orders:
+    post:
+      tags: [Orders]
+      summary: Создать заказ
+      operationId: createOrder
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema:
+            type: string
+          required: true
+          description: Уникальный ключ идемпотентности
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cartId:
+                  type: string
+                paymentId:
+                  type: string
+      responses:
+        '201':
+          description: Заказ создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          description: Неверные данные
+        '409':
+          description: Конфликт (например, корзина уже оформлена)
+
+  /orders/{orderId}:
+    get:
+      tags: [Orders]
+      summary: Получить детали заказа
+      operationId: getOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Данные заказа
           content:
             application/json:
               schema:
@@ -130,320 +347,498 @@ paths:
         '404':
           description: Заказ не найден
 
+    patch:
+      tags: [Orders]
+      summary: Редактирование заказа до оплаты (корзина, способ получения)
+      operationId: patchOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/CartItem'
+                diningOption:
+                  type: string
+                  enum: [DINE_IN, TAKEAWAY]
+      responses:
+        '200':
+          description: Заказ обновлён
+        '404':
+          description: Заказ не найден
+
+    delete:
+      tags: [Orders]
+      summary: Отмена заказа до оплаты
+      operationId: cancelOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Заказ аннулирован
+        '404':
+          description: Заказ не найден
+
+  /orders/active:
+    get:
+      tags: [Orders]
+      summary: Получить список активных заказов для табло
+      operationId: getActiveOrders
+      responses:
+        '200':
+          description: Список активных заказов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActiveOrder'
+
+  # ==================== Loyalty ====================
+  /loyalty/request-code:
+    post:
+      tags: [Loyalty]
+      summary: Запросить SMS-код для регистрации/авторизации
+      operationId: requestLoyaltyCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoyaltyCodeRequest'
+      responses:
+        '202':
+          description: Код отправлен
+        '400':
+          description: Неверный формат номера
+
+  /loyalty/verify:
+    post:
+      tags: [Loyalty]
+      summary: Подтвердить код и получить JWT
+      operationId: verifyLoyaltyCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoyaltyVerifyRequest'
+      responses:
+        '200':
+          description: Успешная авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoyaltyAuthResponse'
+        '401':
+          description: Неверный код
+        '429':
+          description: Слишком много попыток
+
+  /loyalty/balance:
+    get:
+      tags: [Loyalty]
+      summary: Получить текущий баланс баллов
+      operationId: getBalance
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Баланс
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+        '401':
+          description: Неавторизован
+
+  /loyalty/spend:
+    post:
+      tags: [Loyalty]
+      summary: Зарезервировать списание баллов (вызывается перед оплатой)
+      operationId: spendPoints
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema:
+            type: string
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpendPointsRequest'
+      responses:
+        '200':
+          description: Баллы зарезервированы
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  newBalance:
+                    type: integer
+        '400':
+          description: Недостаточно баллов или превышен лимит
+        '401':
+          description: Неавторизован
+
+  /orders/{orderId}/loyalty/estimate-bonus:
+    get:
+      tags: [Loyalty]
+      summary: Оценка количества баллов, которые будут начислены за заказ после оплаты
+      operationId: estimateBonus
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Оценка бонусов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  estimated_points:
+                    type: integer
+        '401':
+          description: Неавторизован
+        '404':
+          description: Заказ не найден
+
+  /orders/{orderId}/loyalty/apply:
+    post:
+      tags: [Loyalty]
+      summary: Списать баллы лояльности
+      operationId: applyLoyaltyPoints
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: Idempotency-Key
+          schema:
+            type: string
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                points_to_spend:
+                  type: integer
+      responses:
+        '200':
+          description: Сумма к оплате пересчитана
+        '400':
+          description: Недостаточно баллов
+        '401':
+          description: Неавторизован
+        '404':
+          description: Заказ не найден
+
+  # ==================== Payments ====================
+  /orders/{orderId}/pay/init:
+    post:
+      tags: [Payments]
+      summary: Инициировать процесс оплаты
+      operationId: initiatePayment
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                method:
+                  type: string
+                  enum: [CARD, CASH]
+      responses:
+        '200':
+          description: Терминал/купюроприемник готов к приему средств
+        '404':
+          description: Заказ не найден
+
+  /orders/{orderId}/pay/confirm:
+    post:
+      tags: [Payments]
+      summary: Фиксация факта оплаты и закрытие заказа
+      description: После этого заказ уходит в производство и печатается чек.
+      operationId: confirmPayment
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: Idempotency-Key
+          schema:
+            type: string
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transaction_id:
+                  type: string
+                amount_paid:
+                  type: number
+                printer_status:
+                  type: string
+                  enum: [OK, ERROR]
+      responses:
+        '200':
+          description: Заказ оплачен, номер присвоен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order_number:
+                    type: string
+                    example: "A-42"
+                  fiscal_receipt_printed:
+                    type: boolean
+                  bonus_earned:
+                    type: integer
+        '400':
+          description: Ошибка при оплате (недостаточно средств, отказ банка)
+        '404':
+          description: Заказ не найден
+
 components:
   securitySchemes:
-    BearerAuth:
+    bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-    SessionID:
-      type: apiKey
-      in: header
-      name: X-Session-ID
-      description: Идентификатор сессии для неавторизованных пользователей
 
   schemas:
-    # ---------- Cart ----------
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+
+    ModifierGroup:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        min:
+          type: integer
+          description: Минимальное количество модификаторов из группы, которое нужно выбрать
+        max:
+          type: integer
+          description: Максимальное количество модификаторов из группы
+        modifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Modifier'
+
+    Modifier:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        price:
+          type: number
+          format: float
+
+    Item:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        basePrice:
+          type: number
+          format: float
+        calories:
+          type: integer
+        imageUrl:
+          type: string
+        available:
+          type: boolean
+        modifierGroups:
+          type: array
+          description: Группы модификаторов (например, размер, дополнения)
+          items:
+            $ref: '#/components/schemas/ModifierGroup'
+
     CartItem:
       type: object
       properties:
-        productId:
-          type: integer
+        id:
+          type: string
+          description: Уникальный идентификатор позиции в корзине (cartItemId)
+        itemId:
+          type: string
+          description: Идентификатор товара из меню
+        name:
+          type: string
         quantity:
           type: integer
           minimum: 1
-        price:
+        unitPrice:
           type: number
-          description: Цена за единицу на момент добавления
-        total:
+          description: Цена за единицу с учётом выбранных модификаторов
+        totalPrice:
           type: number
-          description: price * quantity
-        selectedIngredients:
+        modifiers:
           type: array
           items:
-            type: integer
-          description: Список ID ингредиентов для комбобургера
+            $ref: '#/components/schemas/Modifier'
 
     Cart:
       type: object
       properties:
         id:
-          type: integer
-          format: int64
+          type: string
         items:
           type: array
           items:
             $ref: '#/components/schemas/CartItem'
         totalAmount:
           type: number
-          description: Сумма до применения скидок и бонусов
-        servingType:
+        appliedPromotions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppliedPromotion'
+        diningOption:
           type: string
-          enum: [takeaway, dine-in]
-          description: Способ употребления (с собой/в зале)
-        appliedDiscounts:
-          type: array
-          items:
-            type: object
-            properties:
-              name:
-                type: string
-              amount:
-                type: number
-        bonusPointsToSpend:
-          type: integer
-          description: Количество баллов, которые пользователь решил списать
-        bonusPointsEarned:
-          type: integer
-          description: Баллы, которые будут начислены после оплаты (если выбрано начисление)
-        finalAmount:
+          enum: [DINE_IN, TAKEAWAY]
+
+    AppliedPromotion:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        discountAmount:
           type: number
-          description: Итоговая сумма к оплате (после скидок и списания баллов)
-        giftAdded:
-          type: boolean
-          description: true, если добавлен подарок (например, стакан)
+        giftItem:
+          $ref: '#/components/schemas/Item'
 
-    AddItemRequest:
-      type: object
-      required:
-        - productId
-        - quantity
-      properties:
-        productId:
-          type: integer
-        quantity:
-          type: integer
-          minimum: 1
-        selectedIngredients:
-          type: array
-          items:
-            type: integer
-          description: Обязательно для комбобургеров
-
-    UpdateItemRequest:
-      type: object
-      required:
-        - quantity
-      properties:
-        quantity:
-          type: integer
-          minimum: 0
-          description: Если 0 — товар удаляется
-
-    # ---------- Order (расширенная) ----------
     Order:
       type: object
       properties:
         id:
-          type: integer
-          example: 12345
-        orderNumber:
           type: string
-          example: "025"
+        status:
+          type: string
+          enum: [NEW, PAID, PREPARING, READY, COMPLETED, CANCELLED]
         createdAt:
           type: string
           format: date-time
-        status:
-          $ref: '#/components/schemas/OrderStatus'
-        orderStatus:
-          type: integer
-          description: |
-            Состояние заказа в платёжном шлюзе:
-            * 0 – заказ зарегистрирован, но не оплачен
-            * 1 – заказ оплачен
-            * 2 – по заказу была проведена операция возврата
-            * 3 – инициирована аутентификация через ACS Банка-эмитента
-            * 4 – авторизация отклонена
-          enum: [0, 1, 2, 3, 4]
-          example: 0
-        servingType:
-          $ref: '#/components/schemas/ServingType'
         totalAmount:
           type: number
-          description: Общая стоимость заказа до применения скидок и списания бонусов
-        finalAmount:
-          type: number
-          description: Итоговая сумма к оплате после скидок и списания бонусов
-        appliedDiscounts:
-          type: array
-          items:
-            type: object
-            properties:
-              name:
-                type: string
-                example: "Скидка 10%"
-              amount:
-                type: number
-                example: 50.0
-        bonusPointsSpent:
-          type: integer
-          description: Количество бонусов, списанных при оплате
-          example: 100
-        bonusPointsEarned:
-          type: integer
-          description: Количество бонусов, начисленных за заказ
-          example: 20
-        giftAdded:
-          type: boolean
-          description: Добавлен ли подарок (например, стакан)
-          example: false
         items:
           type: array
           items:
-            type: object
-            properties:
-              productId:
-                type: integer
-                example: 101
-              productName:
-                type: string
-                example: "Чизбургер"
-              quantity:
-                type: integer
-                example: 2
-              price:
-                type: number
-                example: 199.50
-              total:
-                type: number
-                example: 399.00
-              selectedIngredients:
-                type: array
-                items:
-                  type: integer
-                description: Идентификаторы выбранных ингредиентов (для комбобургера)
-                example: [1, 3, 5]
-        payments:
-          type: array
-          description: Список платежей по заказу (может быть несколько при смешанной оплате)
-          items:
-            $ref: '#/components/schemas/Payment'
+            $ref: '#/components/schemas/CartItem'
+        diningOption:
+          type: string
+        paymentMethod:
+          type: string
 
-    OrderStatus:
-      type: string
-      enum: [pending, paid, in-progress, ready, completed, cancelled]
-
-    ServingType:
-      type: string
-      enum: [takeaway, dine-in]
-
-    # ---------- Payment (общая схема с дискриминатором) ----------
-    Payment:
+    ActiveOrder:
       type: object
       properties:
-        id:
-          type: integer
-          example: 5001
-        amount:
-          type: number
-          description: Сумма платежа
-          example: 399.00
-        date:
+        orderId:
           type: string
-          format: date-time
-          description: Дата и время совершения платежа
         status:
           type: string
-          enum: [pending, completed, failed, refunded]
-          description: Статус платежа
-        transactionId:
+        ticketNumber:
           type: string
-          description: Идентификатор транзакции в платёжной системе
-          example: "txn_abc123"
-        method:
-          type: string
-          enum: [card, cash, qr, bonus]
-          description: Способ оплаты
+
+    LoyaltyCodeRequest:
+      type: object
       required:
-        - method
-        - amount
-        - status
-      discriminator:
-        propertyName: method
-        mapping:
-          card: '#/components/schemas/CardPayment'
-          cash: '#/components/schemas/CashPayment'
-          qr: '#/components/schemas/QrPayment'
-          bonus: '#/components/schemas/BonusPayment'
+        - phone
+      properties:
+        phone:
+          type: string
+          pattern: '^\+7[0-9]{10}$'
+          example: "+79161234567"
 
-    CardPayment:
-      allOf:
-        - $ref: '#/components/schemas/Payment'
-        - type: object
-          properties:
-            maskedPan:
-              type: string
-              description: Маскированный номер карты
-              example: "**** **** **** 1234"
-            cardType:
-              type: string
-              enum: [visa, mastercard, mir, other]
-              description: Тип карты
-            expiry:
-              type: string
-              pattern: '^(0[1-9]|1[0-2])/[0-9]{2}$'
-              description: Срок действия (ММ/ГГ)
-              example: "12/25"
-            holderName:
-              type: string
-              description: Имя держателя карты
-              example: "IVAN PETROV"
+    LoyaltyVerifyRequest:
+      type: object
+      required:
+        - phone
+        - code
+      properties:
+        phone:
+          type: string
+        code:
+          type: string
 
-    CashPayment:
-      allOf:
-        - $ref: '#/components/schemas/Payment'
-        - type: object
-          properties:
-            amountReceived:
-              type: number
-              description: Внесённая сумма наличными
-              example: 500.00
-            change:
-              type: number
-              description: Сдача
-              example: 101.00
-            receiptNumber:
-              type: string
-              description: Номер чека
-              example: "1234567890"
+    LoyaltyAuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        balance:
+          type: integer
 
-    QrPayment:
-      allOf:
-        - $ref: '#/components/schemas/Payment'
-        - type: object
-          properties:
-            qrType:
-              type: string
-              enum: [sbp, sberpay, tinkoff, other]
-              description: Тип QR-кода
-              example: "sbp"
-            qrData:
-              type: string
-              description: Данные для сканирования (ссылка или закодированная строка)
-              example: "https://qr.nspk.ru/..."
-            bank:
-              type: string
-              description: Банк получателя
-              example: "Сбербанк"
-            account:
-              type: string
-              description: Счёт получателя
-              example: "40702810123450123456"
+    BalanceResponse:
+      type: object
+      properties:
+        balance:
+          type: integer
 
-    BonusPayment:
-      allOf:
-        - $ref: '#/components/schemas/Payment'
-        - type: object
-          properties:
-            bonusPointsSpent:
-              type: integer
-              description: Количество списанных бонусов
-              example: 100
-            conversionRate:
-              type: number
-              description: Курс конвертации (сколько рублей за один бонус)
-              example: 1.0
-            remainingAmount:
-              type: number
-              description: Остаток суммы, оплаченный другим способом (если бонусов не хватило)
-              example: 299.00
+    SpendPointsRequest:
+      type: object
+      properties:
+        cartId:
+          type: string
+        points:
+          type: integer
