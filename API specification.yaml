@@ -6,7 +6,7 @@ info:
 
 servers:
   - url: https://zemlav11.github.io/otus_restobook/swagger.html
-    description: Production server
+    description: server otus_restobook
 
 tags:
   - name: Categories
